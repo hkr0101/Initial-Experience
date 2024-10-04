@@ -1,7 +1,7 @@
 package db
 
 import (
-	"Initial_Experience/mymodels"
+	"Initial_Experience/myModels"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"log"
@@ -23,7 +23,7 @@ func Connect() {
 
 // 自动迁移模型
 func Migrate() {
-	err := DB.AutoMigrate(&mymodels.User{}, &mymodels.Question{})
+	err := DB.AutoMigrate(&mymodels.User{}, &mymodels.Question{}, &mymodels.Answer{})
 	if err != nil {
 		log.Fatal("Migration failed:", err)
 	}

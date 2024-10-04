@@ -2,14 +2,15 @@ package routes
 
 import (
 	"Initial_Experience/db"
+	"Initial_Experience/myModels"
 	"Initial_Experience/myauth"
-	"Initial_Experience/mymodels"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
 )
 
-var user = myauth.Curuser
+//var user = myauth.Curuser
 
 // 创建问题
 
@@ -19,8 +20,9 @@ func CreateQuestion(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	question.UserID = user.UserID
-	//fmt.Print(question)
+	question.UserID = myauth.Curuser.UserID
+	//fmt.Println(myauth.Curuser.UserID)
+	//fmt.Println(question.UserID)
 	db.DB.Create(&question)
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "question": question})
 }
@@ -36,7 +38,7 @@ func DeleteQuestion(c *gin.Context) {
 		return
 	}
 	//如果不是你的问题
-	if myauth.Curuser.UserID != question.UserID {
+	if myauth.Curuser.UserID != question.UserID && myauth.Curuser.Username != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
 		return
 	}
@@ -59,7 +61,7 @@ func UpdateQuestion(c *gin.Context) {
 		return
 	}
 	//如果不是你的问题
-	if myauth.Curuser.UserID != question.UserID {
+	if myauth.Curuser.UserID != question.UserID && myauth.Curuser.Username != "admin" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
 		return
 	}
@@ -73,18 +75,23 @@ func UpdateQuestion(c *gin.Context) {
 	newQuestion.UserID = question.UserID
 	newQuestion.QuestionID = question.QuestionID
 
-	if err := db.DB.Save(&question).Error; err != nil {
+	if err := db.DB.Save(&newQuestion).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "question": question})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "question": newQuestion})
 }
 
 // 获取所有问题
 
 func GetQuestions(c *gin.Context) {
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+
 	var questions []mymodels.Question
-	db.DB.Find(&questions)
+	db.DB.Offset((page - 1) * pageSize).Limit(pageSize).Find(&questions)
+
 	c.JSON(http.StatusOK, questions)
 }
 
@@ -103,11 +110,14 @@ func GetQuestionByID(c *gin.Context) {
 //获取当前用户的所有问题
 
 func GetQuestionByUser(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
 	var question []mymodels.Question
 	myID := myauth.Curuser.UserID
-	if err := db.DB.Where("user_id = ?", myID).Find(&question).Error; err != nil {
+	if err := db.DB.Where("user_id = ?", myID).Offset((page - 1) * pageSize).Limit(pageSize).Find(&question).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
 		return
 	}
+	fmt.Println(myID)
 	c.JSON(http.StatusOK, question)
 }

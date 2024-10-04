@@ -2,15 +2,30 @@ package myauth
 
 import (
 	"Initial_Experience/db"
-	"Initial_Experience/mymodels"
+	"Initial_Experience/myModels"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 )
 
 var Loginstate bool = false
 var Curuser mymodels.User = mymodels.User{}
 
+func hashPassword(password string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedPassword), nil
+}
+
+func checkPassword(hashedPassword, password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	return err == nil
+}
+
 // 注册
+
 func RegisterHandler(c *gin.Context) {
 	var user mymodels.User
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -25,6 +40,9 @@ func RegisterHandler(c *gin.Context) {
 	}
 
 	// 创建新用户
+
+	user.Password, _ = hashPassword(user.Password)
+
 	if err := db.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating user"})
 		return
@@ -33,6 +51,7 @@ func RegisterHandler(c *gin.Context) {
 }
 
 // 登录处理
+
 func LoginHandler(c *gin.Context) {
 	if Loginstate {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "already logged"})
@@ -43,15 +62,16 @@ func LoginHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	var foundUser mymodels.User
 	if err := db.DB.Where("username = ?", user.Username).First(&foundUser).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username"})
 		return
 	}
 
-	if foundUser.Password != user.Password {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
+	check := checkPassword(foundUser.Password, user.Password)
+
+	if !check {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid password"})
 		return
 	}
 	// 登录成功，可以设置用户身份信息到上下文中
@@ -61,6 +81,7 @@ func LoginHandler(c *gin.Context) {
 }
 
 // 身份验证中间件
+
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		//user11, exists := c.Get("user")
@@ -75,6 +96,7 @@ func AuthMiddleware() gin.HandlerFunc {
 }
 
 // 登出处理
+
 func LogoutHandler(c *gin.Context) {
 	Loginstate = false // 重置登录状态
 	Curuser = mymodels.User{}

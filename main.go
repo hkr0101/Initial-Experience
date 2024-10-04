@@ -27,7 +27,7 @@ func main() {
 	//查看某个问题的所有答案
 	r.GET("/questions/:question_id/answer", routes.GetAnswerListByQuestion)
 	//查看某个问题的某个答案
-	r.GET("/questions/:question_id/answer/:answer_id", routes.GetAnswerByID)
+	r.GET("/questions/answer/:answer_id", routes.GetAnswerByID)
 
 	auth := r.Group("/my")
 	auth.Use(myauth.AuthMiddleware()) // 使用身份验证中间件
@@ -39,11 +39,11 @@ func main() {
 		//删除问题
 		auth.DELETE("/questions/:question_id", routes.DeleteQuestion)
 		//删除答案
-		auth.DELETE("/questions/:question_id/answer/:answer_id", routes.DeleteAnswer)
+		auth.DELETE("/questions/answer/:answer_id", routes.DeleteAnswer)
 		//更新问题
 		auth.PUT("/questions/:question_id", routes.UpdateQuestion)
 		//更新答案
-		auth.PUT("/questions/:question_id/answer", routes.UpdateAnswer)
+		auth.PUT("/:answer_id", routes.UpdateAnswer)
 		//给出当前用户的所有答案
 		auth.GET("/answer", routes.GetAnswerListByUser)
 		//给出当前用户的所有问题
