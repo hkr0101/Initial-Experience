@@ -13,3 +13,4 @@
 * myauth中是登录与登出的操作
 * db中的是连接数据库以及在数据库中自动生成实体
 * AI_answer中便是前文中提到的尚未完成的ai生成答案部分
+api文档：https://apifox.com/apidoc/shared-86117e10-c314-4e57-a13f-494295b93689
