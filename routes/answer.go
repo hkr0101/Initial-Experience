@@ -19,6 +19,10 @@ func CreateAnswer(c *gin.Context) {
 		return
 	}
 	qID, _ := strconv.Atoi(c.Param("question_id"))
+	if err := db.DB.Where("question_id = ?", qID).First(&mymodels.Question{}).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
+		return
+	}
 	answer.QuestionID = qID
 	answer.UserID = Curuser.UserID
 	db.DB.Create(&answer)
@@ -133,6 +137,12 @@ func CreateAnswerByAI(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "question not found"})
 		return
 	}
+
+	if Curuser.UserID != question.UserID && Curuser.Username != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+		return
+	}
+
 	answer_content, err := AI_answer.CallAI(question.Content, AI)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
