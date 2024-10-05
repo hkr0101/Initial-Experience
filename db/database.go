@@ -22,8 +22,15 @@ func Connect() {
 }
 
 // 自动迁移模型
+
 func Migrate() {
-	err := DB.AutoMigrate(&mymodels.User{}, &mymodels.Question{}, &mymodels.Answer{})
+	err := DB.AutoMigrate(
+		&mymodels.User{},
+		&mymodels.Question{},
+		&mymodels.Answer{},
+		&mymodels.OnlineUser{},
+		&mymodels.AIRequest{},
+	)
 	if err != nil {
 		log.Fatal("Migration failed:", err)
 	}

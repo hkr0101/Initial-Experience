@@ -1,7 +1,6 @@
 package main
 
 import (
-	"Initial_Experience/AI_answer"
 	"Initial_Experience/db"
 	"Initial_Experience/myauth"
 	"Initial_Experience/routes"
@@ -16,8 +15,6 @@ func main() {
 	r.POST("/register", myauth.RegisterHandler)
 	// 用户登录
 	r.POST("/login", myauth.LoginHandler)
-	// 用户登出
-	r.POST("/logout", myauth.LogoutHandler)
 	// 问题管理
 
 	//查看所有问题
@@ -29,7 +26,7 @@ func main() {
 	//查看某个问题的某个答案
 	r.GET("/questions/answer/:answer_id", routes.GetAnswerByID)
 
-	auth := r.Group("/my")
+	auth := r.Group("/:my_id")
 	auth.Use(myauth.AuthMiddleware()) // 使用身份验证中间件
 	{
 		//创建问题
@@ -51,7 +48,9 @@ func main() {
 		//登出
 		auth.POST("/logout", myauth.LogoutHandler)
 		//调用ai，未完成
-		auth.POST("/chat", aianswer.ChatGPTHandler)
+		auth.POST("/chat/registerandchange", myauth.RegisterAndChangeAI)
+		//生成ai答案
+		auth.POST("/chat/question/:question_id/answer", routes.CreateAnswerByAI)
 	}
 	r.Run(":8080")
 }

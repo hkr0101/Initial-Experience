@@ -22,3 +22,15 @@ type Answer struct {
 	QuestionID int    `json:"question_id"` // 外键，关联问题
 	UserID     int    `json:"user_id"`     // 外键，关联用户
 }
+
+type OnlineUser struct {
+	UserID int `json:"user_id" gorm:"primaryKey"`
+}
+
+type AIRequest struct {
+	UserID    int    `json:"user_id" gorm:"primaryKey"`
+	APPID     string `json:"app_id" binding:"required"`
+	APISecret string `json:"api_secret" binding:"required"`
+	APIKey    string `json:"api_key" binding:"required"`
+	HostUrl   string `json:"host_url" binding:"required"`
+}

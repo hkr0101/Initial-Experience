@@ -3,13 +3,12 @@ package myauth
 import (
 	"Initial_Experience/db"
 	"Initial_Experience/myModels"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
+	"strconv"
 )
-
-var Loginstate bool = false
-var Curuser mymodels.User = mymodels.User{}
 
 func hashPassword(password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -53,11 +52,9 @@ func RegisterHandler(c *gin.Context) {
 // 登录处理
 
 func LoginHandler(c *gin.Context) {
-	if Loginstate {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "already logged"})
-		return
-	}
+	var onlineUser mymodels.OnlineUser
 	var user mymodels.User
+
 	if err := c.ShouldBindJSON(&user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -74,19 +71,27 @@ func LoginHandler(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid password"})
 		return
 	}
-	// 登录成功，可以设置用户身份信息到上下文中
-	Loginstate = true
-	Curuser = foundUser
-	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
+	// 匹配成功，可以设置用户身份信息到上下文中
+	// 重复登录
+	//fmt.Println(user.UserID)
+	if err := db.DB.Where("user_id = ?", foundUser.UserID).First(&onlineUser).Error; err != nil {
+		onlineUser.UserID = foundUser.UserID
+		fmt.Println(onlineUser)
+		db.DB.Create(&onlineUser)
+		c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
+		return
+	}
+	c.JSON(http.StatusUnauthorized, gin.H{"message": "User already logged in"})
+
 }
 
 // 身份验证中间件
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		//user11, exists := c.Get("user")
-		//fmt.Println("User:", user11)
-		if !Loginstate {
+		id, _ := strconv.Atoi(c.Param("my_id"))
+		var curOnlineUser mymodels.OnlineUser
+		if err := db.DB.Where("user_id = ?", id).First(&curOnlineUser).Error; err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 			c.Abort()
 			return
@@ -98,7 +103,26 @@ func AuthMiddleware() gin.HandlerFunc {
 // 登出处理
 
 func LogoutHandler(c *gin.Context) {
-	Loginstate = false // 重置登录状态
-	Curuser = mymodels.User{}
+	id, _ := strconv.Atoi(c.Param("my_id"))
+	if err := db.DB.Delete(&mymodels.OnlineUser{}, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
+}
+
+// AI需求注册
+func RegisterAndChangeAI(c *gin.Context) {
+	id, _ := strconv.Atoi(c.Param("my_id"))
+	var user_AI mymodels.AIRequest
+	if err := c.ShouldBindJSON(&user_AI); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	user_AI.UserID = id
+	if err := db.DB.Save(&user_AI).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "save AI"})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"message": "User_AI registered successfully"})
 }
