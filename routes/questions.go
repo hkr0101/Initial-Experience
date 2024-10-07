@@ -11,13 +11,17 @@ import (
 //var user = myauth.Curuser
 
 func getCurUser(c *gin.Context) mymodels.User {
-	userid, _ := strconv.Atoi(c.Param("my_id"))
-	var curOnlineUser mymodels.User
-	if err := db.DB.Where("user_id = ?", userid).First(&curOnlineUser).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
-		return mymodels.User{}
-	}
-	return curOnlineUser
+	// 从上下文中获取用户ID和用户名
+	userID, _ := c.Get("userID")
+	username, _ := c.Get("username")
+	var user mymodels.User
+	c.JSON(http.StatusOK, gin.H{
+		"userID":   userID,
+		"username": username,
+	})
+	user.UserID = userID.(int)
+	user.Username = username.(string)
+	return user
 }
 
 // 创建问题

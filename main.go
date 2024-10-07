@@ -26,7 +26,7 @@ func main() {
 	//查看某个问题的某个答案
 	r.GET("/questions/answer/:answer_id", routes.GetAnswerByID)
 
-	auth := r.Group("/:my_id")
+	auth := r.Group("/api")
 	auth.Use(myauth.AuthMiddleware()) // 使用身份验证中间件
 	{
 		//创建问题
