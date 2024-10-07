@@ -7,9 +7,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 )
 
+var jwtKey = []byte(os.Getenv("JWT_SECRET")) // JWT 密钥，可以通过环境变量配置
+
+// Hash 密码
 func hashPassword(password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -18,13 +23,31 @@ func hashPassword(password string) (string, error) {
 	return string(hashedPassword), nil
 }
 
+// 检查密码
 func checkPassword(hashedPassword, password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	return err == nil
 }
 
-// 注册
+// 创建 JWT
+func GenerateJWT(userID uint) (string, error) {
+	// 设置过期时间为24小时
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &jwt.RegisteredClaims{
+		Subject:   strconv.Itoa(int(userID)), // 设置用户ID为JWT的Subject
+		ExpiresAt: jwt.NewNumericDate(expirationTime),
+	}
 
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+// 注册处理
 func RegisterHandler(c *gin.Context) {
 	var user mymodels.User
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -39,9 +62,7 @@ func RegisterHandler(c *gin.Context) {
 	}
 
 	// 创建新用户
-
 	user.Password, _ = hashPassword(user.Password)
-
 	if err := db.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating user"})
 		return
@@ -50,77 +71,99 @@ func RegisterHandler(c *gin.Context) {
 }
 
 // 登录处理
-
 func LoginHandler(c *gin.Context) {
-	var onlineUser mymodels.OnlineUser
 	var user mymodels.User
 
 	if err := c.ShouldBindJSON(&user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
 	var foundUser mymodels.User
 	if err := db.DB.Where("username = ?", user.Username).First(&foundUser).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username"})
 		return
 	}
 
-	check := checkPassword(foundUser.Password, user.Password)
-
-	if !check {
+	if !checkPassword(foundUser.Password, user.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid password"})
 		return
 	}
-	// 匹配成功，可以设置用户身份信息到上下文中
-	// 重复登录
-	//fmt.Println(user.UserID)
-	if err := db.DB.Where("user_id = ?", foundUser.UserID).First(&onlineUser).Error; err != nil {
-		onlineUser.UserID = foundUser.UserID
-		fmt.Println(onlineUser)
-		db.DB.Create(&onlineUser)
-		c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
+
+	// 生成 JWT Token
+	tokenString, err := GenerateJWT(foundUser.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Could not generate token"})
 		return
 	}
-	c.JSON(http.StatusUnauthorized, gin.H{"message": "User already logged in"})
 
+	// 返回 JWT Token 给客户端
+	c.JSON(http.StatusOK, gin.H{"message": "Login successful", "token": tokenString})
 }
 
-// 身份验证中间件
+// 验证JWT Token
+func ValidateJWT(tokenStr string) (*jwt.RegisteredClaims, error) {
+	claims := &jwt.RegisteredClaims{}
 
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	return claims, nil
+}
+
+// JWT身份验证中间件
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id, _ := strconv.Atoi(c.Param("my_id"))
-		var curOnlineUser mymodels.OnlineUser
-		if err := db.DB.Where("user_id = ?", id).First(&curOnlineUser).Error; err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		// 从请求头中提取 JWT
+		tokenString := c.GetHeader("Authorization")
+
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Authorization token required"})
 			c.Abort()
 			return
 		}
+
+		// 验证 Token
+		claims, err := ValidateJWT(tokenString)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		// 设置当前用户 ID 到上下文
+		userID, _ := strconv.Atoi(claims.Subject)
+		c.Set("userID", userID)
+
 		c.Next()
 	}
 }
 
-// 登出处理
-
+// 登出处理 (JWT无状态不需要特殊登出逻辑，只需在客户端删除Token)
 func LogoutHandler(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("my_id"))
-	if err := db.DB.Delete(&mymodels.OnlineUser{}, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
 
 // AI需求注册
 func RegisterAndChangeAI(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("my_id"))
-	var user_AI mymodels.AIRequest
-	if err := c.ShouldBindJSON(&user_AI); err != nil {
+	userID, _ := c.Get("userID")
+	id := userID.(int)
+	var userAI mymodels.AIRequest
+	if err := c.ShouldBindJSON(&userAI); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	user_AI.UserID = id
-	if err := db.DB.Save(&user_AI).Error; err != nil {
+	userAI.UserID = uint(id)
+	if err := db.DB.Save(&userAI).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "save AI"})
 		return
 	}
