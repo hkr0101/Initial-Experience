@@ -25,7 +25,7 @@ func main() {
 	r.GET("/questions/:question_id/answer", routes.GetAnswerListByQuestion)
 	//查看某个问题的某个答案
 	r.GET("/questions/answer/:answer_id", routes.GetAnswerByID)
-
+	//登录之后才能使用
 	auth := r.Group("/api")
 	auth.Use(myauth.AuthMiddleware()) // 使用身份验证中间件
 	{
